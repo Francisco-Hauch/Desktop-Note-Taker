@@ -1,8 +1,11 @@
+import ctypes
 import json
 import os
 import re
+import struct
 import tkinter as tk
 import unicodedata
+import uuid
 from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -76,8 +79,28 @@ def salvar(rotulo, texto, extras):
         encoding="utf-8")
 
 
+def id_na_barra(janela, aumid):
+    """Grava System.AppUserModel.ID na janela, igual ao do atalho (atalho.py). O Python da Store é app
+    empacotado e ignora SetCurrentProcessExplicitAppUserModelID: sem isto a barra mostra o ícone do Python."""
+    hwnd = ctypes.windll.user32.GetParent(janela.winfo_id())
+    loja = ctypes.c_void_p()
+    iid = uuid.UUID("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99").bytes_le  # IPropertyStore
+    ctypes.windll.shell32.SHGetPropertyStoreForWindow(hwnd, iid, ctypes.byref(loja))
+    vtbl = ctypes.cast(loja, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+    set_value = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p)(vtbl[6])
+    release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
+    chave = uuid.UUID("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3").bytes_le + struct.pack("<I", 5)
+    texto = ctypes.c_wchar_p(aumid)
+    valor = struct.pack("<H6xQQ", 31, ctypes.cast(texto, ctypes.c_void_p).value, 0)  # PROPVARIANT VT_LPWSTR
+    set_value(loja, chave, valor)
+    release(loja)
+
+
 root = tk.Tk()
 root.title("Nota rápida")
+root.iconbitmap(default=Path(__file__).with_name("manga.ico"))
+root.update_idletasks()
+id_na_barra(root, "Fran.NotaRapida")
 root.geometry("380x360")
 root.attributes("-topmost", True)
 
@@ -135,10 +158,10 @@ texto.bind("<Control-Return>", enviar)
 bolha = tk.Toplevel(root)
 bolha.overrideredirect(True)
 bolha.attributes("-topmost", True, "-transparentcolor", "white")
-bolha.geometry(f"56x56+{root.winfo_screenwidth() - 90}+{root.winfo_screenheight() - 150}")
-cv = tk.Canvas(bolha, width=56, height=56, bg="white", highlightthickness=0, cursor="hand2")
-cv.create_oval(2, 2, 54, 54, fill="#4a6cf7", outline="")
-cv.create_text(28, 28, text="📝", font=("Segoe UI Emoji", 20))
+bolha.geometry(f"64x64+{root.winfo_screenwidth() - 100}+{root.winfo_screenheight() - 160}")
+cv = tk.Canvas(bolha, width=64, height=64, bg="white", highlightthickness=0, cursor="hand2")
+icone = tk.PhotoImage(file=Path(__file__).with_name("manga.png"))
+cv.create_image(32, 32, image=icone)
 cv.pack()
 bolha.withdraw()
 arrasto = {}
