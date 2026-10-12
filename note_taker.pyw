@@ -106,8 +106,10 @@ def id_na_barra(janela, aumid):
 # sol (6h–8h e 17h–19h) e noite. A máquina de escrever fica numa mesinha na areia; a folha sai do rolo.
 P = 3  # tamanho de cada "pixel" da cena, em pixels de tela (recalculado pela largura da janela)
 Q = 6  # unidade das medidas da mesinha e da máquina, em pixels de tela
+FOLHA_LARG, FOLHA_ALT = 400, 460  # tamanho máximo da folha, em pixels de tela
 # areia: clara, base, grão, brilho | mar: longe, meio, perto | traco: claro, escuro, cor do céu
-# montanha: longe, perto, borda | pedra: base, meio, borda, brilho | barco: casco, vela
+# montanha: longe, perto, borda | pedra: base, meio, borda, brilho
+# golfinho: costas, corpo, barriga | siri: casca, pernas
 # luz: cor e força que tingem a mesa e a máquina, para combinarem com a fase
 PAPEL, CAMPO, TINTA, LARANJA, REALCE = "#FFF8E7", "#F7EBD0", "#2B1D14", "#E8743B", "#F2A541"
 FASES = {
@@ -119,7 +121,8 @@ FASES = {
         reflexo=("#FFF1A8", "#FFC85E", "#F58A4A"), espuma="#FFF3DC",
         areia=("#EDB878", "#D99A5E", "#B97A47", "#FFD08A"), molhada=("#BE7F55", "#A36A48"),
         folha=("#142235", "#22364E"), tronco=("#152438", "#E3836A"),
-        pedra=("#231F3A", "#3A2A4E", "#D9675A", "#F7A27A"), barco=("#142235", "#142235"), passaro="#4A1F38",
+        pedra=("#231F3A", "#3A2A4E", "#D9675A", "#F7A27A"), passaro="#4A1F38",
+        golfinho=("#2A2E4A", "#4A4A6A", "#D99A8A"), siri=("#D8553E", "#8E2E28"),
         mesa=("#9A6A4A", "#7A5038", "#4E3426"), luz=("#FF8A50", .08), papel="#FFF0DA", relogio="#FFF2DC", sombra="#8E2A4A"),
     "dia": dict(
         ceu=("#2B6FD0", "#3483DE", "#4596E8", "#5AABEF", "#74BFF3", "#93D2F6", "#B4E2F8", "#D4F0FA"),
@@ -129,7 +132,8 @@ FASES = {
         reflexo=("#FFFFFF", "#E3F7FF", "#B5E3FA"), espuma="#FFFFFF",
         areia=("#F8E2A6", "#EFCF8C", "#DDB673", "#FFF4D0"), molhada=("#D2AE70", "#BE985E"),
         folha=("#2C8A3C", "#5BBE52"), tronco=("#7A5230", "#B5854F"),
-        pedra=("#5E5A66", "#7A7682", "#A9A4B0", "#D6D2DA"), barco=("#7A3B2A", "#FFFFFF"), passaro="#2B3A4A",
+        pedra=("#5E5A66", "#7A7682", "#A9A4B0", "#D6D2DA"), passaro="#2B3A4A",
+        golfinho=("#3E6380", "#5F89A8", "#D5E2EA"), siri=("#E5533A", "#A3301E"),
         mesa=("#B98552", "#8A5A2B", "#6B4423"), luz=("#FFFFFF", 0), papel=PAPEL, relogio="#FFFFFF", sombra="#1F4F80"),
     "noite": dict(
         ceu=("#04071A", "#070C26", "#0C1232", "#121A40", "#19224E", "#222C5C", "#2D376A", "#3A4478"),
@@ -139,11 +143,17 @@ FASES = {
         reflexo=("#FFFDEB", "#D4D6F2", "#8E95C8"), espuma="#B8C2EE",
         areia=("#5E5A76", "#524E6A", "#46425C", "#77739A"), molhada=("#3E3B58", "#34314C"),
         folha=("#070B1E", "#111836"), tronco=("#070B1E", "#2C3772"),
-        pedra=("#0A0E22", "#151B38", "#2E3870", "#4A56A0"), barco=("#070B1E", "#070B1E"), passaro=None,
+        pedra=("#0A0E22", "#151B38", "#2E3870", "#4A56A0"), passaro=None,
+        golfinho=("#3A4A8A", "#5A6AAA", "#A4AEDE"), siri=("#6A3A5A", "#40243C"),
         mesa=("#7A6A75", "#5A4A55", "#3A2D36"), luz=("#141C48", .4), papel="#ECEAF4", relogio="#F4F1D0", sombra="#000000"),
 }
 MAQUINA, MAQUINA_LUZ, TECLA, TECLA_SOMBRA, ROLO = "#2F4858", "#4A6B7C", "#EDE6D3", "#1C2C36", "#1A1A1A"
 PASSARO = (["x...x", ".x.x.", "..x.."], [".....", "xx.xx", "..x.."])  # asas para cima e para baixo
+GOLFINHO = ["..........xx........", ".........xxx........", "......xxxxxxxxx.....", "xx..xxmmmmmmmmmxx...",
+            ".xxxmmmmmmmmmmmmoxx.", ".xxmmbbbbbbbbbbbbbxxx", "xx...bbbbbbbbbbbb...",
+            ".......xx..........."]  # virado para a direita
+SIRI = (["c.........c", "cc..o.o..cc", ".c..k.k..c.", "..cbhhhbc..", "...bbbbb...", "..l.l.l.l..", ".l.......l."],
+        ["c.........c", "cc..o.o..cc", ".c..k.k..c.", "..cbhhhbc..", "...bbbbb...", ".l.l...l.l.", "..l.....l.."])
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 DIGITOS = {  # fonte 3x5
     "0": "111101101101111", "1": "010110010010111", "2": "111001111100111", "3": "111001111001111",
@@ -172,7 +182,7 @@ fundo = tk.Canvas(root, highlightthickness=0, bg="black")
 fundo.pack(fill="both", expand=True)
 
 # Folha: cabeçalho, tipos (abas pequenas), campos extras e o texto.
-papel = tk.Frame(fundo, bg=PAPEL, padx=16, pady=10, highlightthickness=3, highlightbackground="#D8C8A8")
+papel = tk.Frame(fundo, bg=PAPEL, padx=12, pady=10, highlightthickness=3, highlightbackground="#D8C8A8")
 folha_id = fundo.create_window(0, 0, window=papel, anchor="nw")
 cab = tk.Frame(papel, bg=PAPEL)
 cab.pack(fill="x")
@@ -187,7 +197,8 @@ abas.pack(fill="x", pady=(6, 0))
 for r in TIPOS:
     tk.Radiobutton(abas, text=r, value=r, variable=tipo, command=lambda: trocar_tipo(), indicatoron=False,
                    font=(FONTE, 8, "bold"), fg=TINTA, bg=PAPEL, selectcolor=REALCE, activebackground=CAMPO,
-                   relief="flat", offrelief="flat", bd=0, padx=5, pady=2, cursor="hand2").pack(side="left", padx=(0, 2))
+                   relief="flat", offrelief="flat", bd=0, highlightthickness=0, padx=4, pady=2,
+                   cursor="hand2").pack(side="left", padx=(0, 1))
 
 quadro = tk.Frame(papel, bg=PAPEL)
 quadro.pack(fill="x", pady=(6, 0))
@@ -418,25 +429,6 @@ def nuvem(rnd, c):
     return px
 
 
-def barco(c):
-    """Veleiro: mastro, vela grande, bujarrona um tom mais escura e casco afinando no fundo."""
-    casco, vela = c["barco"]
-    sombra = mistura(vela, casco, .25)
-    px, mx, topo = {}, round(4 * E), round(10 * E)
-    for y in range(topo):
-        for x in range(mx + 1, mx + 1 + int(y / topo * 6 * E)):
-            px[x, y] = vela
-        if y > 2 * E:
-            for x in range(mx - int((y - 2 * E) / (topo - 2 * E) * 3.5 * E), mx):
-                px[x, y] = sombra
-        for x in range(mx, mx + max(1, round(E * .6))):
-            px[x, y] = casco
-    for j in range(round(2.5 * E)):
-        for x in range(round(-E + j * .8), round(11 * E - j * .8)):
-            px[x, topo + j] = casco
-    return px
-
-
 def mesa_e_maquina(px, w, h, c, luz):
     """Mesinha e máquina de escrever na mesma grade da cena, com sombreado e a luz da fase.
     As medidas são em pixels de tela (múltiplos de Q) e viram pixels da cena aqui."""
@@ -452,12 +444,12 @@ def mesa_e_maquina(px, w, h, c, luz):
     corpo, corpo_luz, corpo_sombra = tom(MAQUINA), tom(MAQUINA_LUZ), tom(mistura(MAQUINA, "#000000", .3))
     tecla, tecla_sombra, rolo = tom(TECLA), tom(TECLA_SOMBRA), tom(ROLO)
     my = (h - 130) // Q * Q
-    mx1, mx2, bx1, bx2 = ((w // 2 + d) // Q * Q for d in (-330, 330, -270, 270))
+    mx1, mx2, bx1, bx2 = ((w // 2 + d) // Q * Q for d in (-288, 288, -228, 228))
     by = my - 16 * Q
     ry = by - 3 * Q
     S = lambda v: v // P  # noqa: E731
-    papel_x1, papel_x2 = S(w // 2 - 240), S(w // 2 + 240)
-    papel_y1 = S(ry + Q - min(340, ry - 64))
+    papel_x1, papel_x2 = S(w // 2 - FOLHA_LARG // 2), S(w // 2 + FOLHA_LARG // 2)
+    papel_y1 = S(ry + Q - min(FOLHA_ALT, ry - 64))
     H = -(-h // P)
 
     # mesa: tampo visto de cima, frente com veios, pernas com borda de luz
@@ -687,16 +679,20 @@ def montar():
         for dx, dy in ((0, 0), (7, 2), (13, -1)):
             cena["passaros"].append((dx * E, dy * E, fundo.create_image(0, 0, anchor="nw", tags="cena")))
     cena["mar_id"] = fundo.create_image(0, hz * P, anchor="nw", tags="cena")
-    cena["barco_img"], _, _ = sprite(barco(c))
-    cena["barco"] = (int(W * .29), int(hz + (praia - hz) * .3 - 12 * E))
-    cena["barco_id"] = fundo.create_image(0, 0, image=cena["barco_img"], anchor="nw", tags="cena")
+    casca, pernas = c["siri"]
+    cores = dict(c=casca, b=casca, h=mistura(casca, "#FFFFFF", .35), k=pernas, l=pernas, o="#141414")
+    cena["siri_img"] = [sprite(ampliar(desenho(f, cores), e))[0] for f in SIRI]
+    cena["golf_id"] = fundo.create_image(0, 0, anchor="nw", state="hidden", tags="cena")
+    cena["siri_id"] = fundo.create_image(0, 0, anchor="nw", state="hidden", tags="cena")
+    cena.update(H=H, golf=None, siri=None, golf_prox=cena["t"] + random.uniform(8, 25),
+                siri_prox=cena["t"] + random.uniform(12, 35))
     cena["frente"], _, _ = sprite(frente)
     x0, y0 = min(x for x, _ in frente), min(y for _, y in frente)
     fundo.create_image(x0 * P, y0 * P, image=cena["frente"], anchor="nw", tags="cena")
 
     fundo.coords(botao_id, w // 2, by + 13 * Q)
     tingir_papel(papel, c["papel"])
-    alt, larg = min(340, ry - 64), 480  # folha saindo do rolo
+    alt, larg = min(FOLHA_ALT, ry - 64), FOLHA_LARG  # folha saindo do rolo
     fundo.coords(folha_id, w // 2 - larg // 2, ry + Q - alt)
     fundo.itemconfig(folha_id, width=larg, height=alt)
     relogio()
@@ -785,6 +781,95 @@ def quadro(t, dt):
     fundo.itemconfig(s["mar_id"], image=s["img_mar"])
 
 
+def golfinho(g, t):
+    """Golfinho no instante t do salto g: sai da água, gira acompanhando o arco e mergulha de volta, com
+    respingos na saída e na entrada. O que fica abaixo da superfície (g["y"]) não aparece."""
+    c, e = cena["c"], max(1, round(E))
+    s = (t - g["t0"]) / g["dur"]
+    L, Hm, D = g["L"], g["Hm"], 4 * E
+    cx = g["x"] + g["dir"] * L * s
+    cy = g["y"] + D - (Hm + D) * 4 * s * (1 - s)
+    a = math.atan2(-(Hm + D) * 4 * (1 - 2 * s), L)  # inclinação do arco: nariz para cima na subida
+    ca, sa = math.cos(a), math.sin(a)
+    cores = dict(zip("xmbo", c["golfinho"] + ("#101018",)))
+    larg, alt = max(map(len, GOLFINHO)), len(GOLFINHO)
+    R = int(math.hypot(larg, alt) * e / 2) + 1
+    px = {}
+    for ty in range(-R, R + 1):
+        Y = round(cy + ty)
+        if Y >= g["y"]:
+            continue
+        for tx in range(-R, R + 1):  # gira o desenho buscando, para cada pixel, o ponto de origem
+            ux, uy = tx * ca + ty * sa, -tx * sa + ty * ca
+            i, j = math.floor(ux / e + larg / 2), math.floor(uy / e + alt / 2)
+            if 0 <= j < alt and 0 <= i < len(GOLFINHO[j]) and GOLFINHO[j][i] in cores:
+                px[round(cx + g["dir"] * tx), Y] = cores[GOLFINHO[j][i]]
+    sc = (1 - math.sqrt(1 - D / (Hm + D))) / 2  # quando o corpo cruza a superfície
+    for centro in (sc, 1 - sc):
+        p = (s - centro + .05) / .3
+        if 0 <= p <= 1:
+            xs = g["x"] + g["dir"] * L * centro
+            for k in range(7):
+                h = 6 * E * 4 * p * (1 - p) * (.5 + .5 * ruido(k, g["n"]))
+                X, Y = round(xs + (k - 3) * 1.4 * E * p), round(g["y"] - h)
+                for i in range(e):
+                    for j in range(e):
+                        px[X + i, Y + j] = c["espuma"]
+            for X in range(round(xs - 4 * E * (.5 + p)), round(xs + 4 * E * (.5 + p))):
+                if (X + int(p * 6)) % 3:
+                    px[X, g["y"]] = c["espuma"]
+    return px, s > 1.4
+
+
+def bichos(t, dt):
+    """De vez em quando um golfinho salta no mar (dos lados, fora da folha) e um siri atravessa a areia,
+    parando às vezes."""
+    W, H, e = cena["W"], cena["H"], max(1, round(E))
+    if cena["golf"] is None and t > cena["golf_prox"]:
+        L, meio, folga = 36 * E, W / 2, (FOLHA_LARG / 2 + 30) / P
+        lados = [(a, b) for a, b in ((W * .04, meio - folga - L), (meio + folga, W * .96 - L)) if b > a]
+        if lados:
+            a, b = random.choice(lados)
+            d = random.choice((1, -1))
+            cena["golf"] = dict(t0=t, dur=2, L=L, Hm=12 * E, dir=d, n=random.randrange(99),
+                                x=random.uniform(a, b) + (0 if d > 0 else L),
+                                y=round(cena["hz"] + (cena["praia"] - cena["hz"]) * random.uniform(.35, .75)))
+        else:
+            cena["golf_prox"] = t + 30
+    if cena["golf"]:
+        px, fim = golfinho(cena["golf"], t)
+        if fim:
+            cena["golf"], cena["golf_prox"] = None, t + random.uniform(25, 70)
+            fundo.itemconfig(cena["golf_id"], state="hidden")
+        elif px:
+            cena["golf_img"], x0, y0 = sprite(px)
+            fundo.itemconfig(cena["golf_id"], image=cena["golf_img"], state="normal")
+            fundo.coords(cena["golf_id"], x0 * P, y0 * P)
+        else:
+            fundo.itemconfig(cena["golf_id"], state="hidden")
+
+    if cena["siri"] is None and t > cena["siri_prox"]:
+        d, y0 = random.choice((1, -1)), cena["fim"] + 3 * e
+        cena["siri"] = dict(dir=d, x=-12 * e if d > 0 else W + e, y=round(y0 + (H - y0) * random.uniform(.05, .3)),
+                            v=random.uniform(4, 7) * E, pausa=0)
+    sr = cena["siri"]
+    if sr:
+        if sr["pausa"] > 0:
+            sr["pausa"] -= dt
+            quadro_ = 0
+        else:
+            sr["x"] += sr["dir"] * sr["v"] * dt
+            quadro_ = int(t * 8) % 2
+            if random.random() < dt / 6:
+                sr["pausa"] = random.uniform(.8, 2.5)
+        if not -14 * e < sr["x"] < W + 2 * e:
+            cena["siri"], cena["siri_prox"] = None, t + random.uniform(40, 110)
+            fundo.itemconfig(cena["siri_id"], state="hidden")
+        else:
+            fundo.itemconfig(cena["siri_id"], image=cena["siri_img"][quadro_], state="normal")
+            fundo.coords(cena["siri_id"], round(sr["x"]) * P, (sr["y"] - len(SIRI[0]) * e) * P)
+
+
 def animar():
     if cena.get("W") and root.state() != "withdrawn":
         t = time.monotonic()
@@ -805,9 +890,7 @@ def animar():
                 img, x0, y0 = cena["asas"][int(t * 3 + k) % 2]
                 fundo.coords(item, round(b["x"] + dx + x0) * P, round(b["y"] + dy + y0 + math.sin(t + k) * .6 * E) * P)
                 fundo.itemconfig(item, image=img)
-        bx, by = cena["barco"]
-        fundo.coords(cena["barco_id"], round(bx + math.sin(t * .15) * 2 * E) * P,
-                     round(by + math.sin(t * 1.2) * .6 * E) * P)
+        bichos(t, dt)
         for e in random.sample(cena["estrelas"], min(3, len(cena["estrelas"]))):
             fundo.itemconfig(e, fill=random.choice(("white", "#8890C0", "#4A5290")))
         if datetime.now().strftime("%H:%M") != cena["min"]:
